@@ -1730,7 +1730,7 @@ const tienda = {
   },
 
   // ── AGREGAR AL CARRITO ──────────────────────────────
-  async agregarAlCarrito(id) {
+  agregarAlCarrito(id) {
     const producto = tienda.productos.find(p => String(p.id) === String(id));
     if (!producto) return;
 
@@ -1757,17 +1757,24 @@ const tienda = {
     tienda.renderCarrito();
     mostrarToast('✅ ' + producto.nombre.substring(0, 30) + ' agregado', 'success');
 
-    // Verificar productos gancho (en background, sin bloquear)
+    // Verificar productos gancho (instantáneamente, sin bloquear)
     tienda.verificarProductosGancho(id);
   },
 
   // ── VERIFICAR PRODUCTOS GANCHO ──────────────────────
-  async verificarProductosGancho(id) {
+  verificarProductosGancho(id) {
     try {
-      const res = await fetchConTimeout(API_URL + '?action=getProducto&id=' + encodeURIComponent(id));
-      if (res.success && res.data && res.data.productos_gancho && res.data.productos_gancho.length > 0) {
+      const prod = tienda.productos.find(p => String(p.id) === String(id));
+      if (!prod || !prod.productos_gancho_ids || String(prod.productos_gancho_ids).trim() === '') return;
+
+      const ganchoIds = String(prod.productos_gancho_ids).split(',').map(s => s.trim()).filter(Boolean);
+      if (ganchoIds.length === 0) return;
+
+      const productosGancho = tienda.productos.filter(p => ganchoIds.indexOf(String(p.id)) !== -1);
+
+      if (productosGancho.length > 0) {
         // Filtrar los que ya están en el carrito
-        const nuevosGancho = res.data.productos_gancho.filter(g =>
+        const nuevosGancho = productosGancho.filter(g =>
           !tienda.carrito.find(c => String(c.id) === String(g.id))
         );
         if (nuevosGancho.length > 0) {
@@ -1776,6 +1783,7 @@ const tienda = {
       }
     } catch (err) {
       // Silencioso — no interrumpir la experiencia
+      console.error(err);
     }
   },
 
