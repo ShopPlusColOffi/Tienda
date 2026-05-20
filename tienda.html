@@ -1907,18 +1907,39 @@ const tienda = {
 
   // ── QUITAR DEL CARRITO ──────────────────────────────
   quitarDelCarrito(id) {
-    // Animate removal
+    // Eliminar del array inmediatamente para evitar race conditions (doble click)
+    tienda.carrito = tienda.carrito.filter(i => String(i.id) !== String(id));
+    tienda.guardarCarrito();
+
     const itemEl = document.querySelector(`.item-carrito[data-item-id="${id}"]`);
+    
+    // Si el carrito quedó vacío, saltamos la animación y mostramos el estado vacío instantáneamente
+    if (tienda.carrito.length === 0) {
+      tienda.renderCarrito();
+      return;
+    }
+
+    // Animar la salida si el elemento existe en el DOM
     if (itemEl) {
       itemEl.classList.add('removing');
+      
+      // Actualizar contadores visuales instantáneamente sin redibujar toda la lista
+      const totalItems = tienda.carrito.reduce((sum, i) => sum + i.cantidad, 0);
+      const subtotal = tienda.calcularSubtotal();
+      const badge = document.getElementById('badge-carrito');
+      if (badge) {
+        badge.textContent = totalItems;
+        badge.classList.toggle('visible', totalItems > 0);
+      }
+      const elSub = document.getElementById('carrito-subtotal');
+      const elTot = document.getElementById('carrito-total');
+      if (elSub) elSub.textContent = formatPrecio(subtotal);
+      if (elTot) elTot.textContent = formatPrecio(subtotal);
+
       setTimeout(() => {
-        tienda.carrito = tienda.carrito.filter(i => String(i.id) !== String(id));
-        tienda.guardarCarrito();
-        tienda.renderCarrito();
+        tienda.renderCarrito(); // Redibujar la lista limpia
       }, 300);
     } else {
-      tienda.carrito = tienda.carrito.filter(i => String(i.id) !== String(id));
-      tienda.guardarCarrito();
       tienda.renderCarrito();
     }
   },
@@ -1949,7 +1970,6 @@ const tienda = {
   // ── RENDER CARRITO ──────────────────────────────────
   renderCarrito() {
     const contenedor = document.getElementById('items-carrito');
-    const vacio = document.getElementById('carrito-vacio');
     const badge = document.getElementById('badge-carrito');
     const btnFinalizar = document.getElementById('btn-finalizar');
     const drawerTitulo = document.getElementById('drawer-titulo');
@@ -1978,15 +1998,18 @@ const tienda = {
     btnFinalizar.disabled = tienda.carrito.length === 0;
 
     if (tienda.carrito.length === 0) {
-      contenedor.innerHTML = '';
-      contenedor.appendChild(vacio);
-      vacio.style.display = 'flex';
+      contenedor.innerHTML = `
+        <div id="carrito-vacio" style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:3rem 1rem; text-align:center; color:var(--color-text-muted);">
+          <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom:1rem; opacity:0.5;">
+            <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
+            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+          </svg>
+          <p style="font-weight:600; color:var(--color-text); margin-bottom:0.25rem;">Tu carrito está vacío</p>
+          <p style="font-size:0.85rem;">Agrega productos para comenzar</p>
+        </div>
+      `;
       return;
     }
-
-    // Ocultar mensaje vacío
-    vacio.style.display = 'none';
-    if (vacio.parentElement === contenedor) vacio.remove();
 
     contenedor.innerHTML = tienda.carrito.map(item => {
       const lineTotal = item.precio * item.cantidad;
