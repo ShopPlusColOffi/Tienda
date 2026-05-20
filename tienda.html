@@ -1863,7 +1863,7 @@ const tienda = {
             <p class="gancho-nombre">${escapeHtml(p.nombre)}</p>
             <p class="gancho-precio">${formatPrecio(precio)}</p>
           </div>
-          <button class="btn-gancho-agregar" data-id="${escapeHtml(p.id)}" data-nombre="${escapeHtml(p.nombre)}" data-precio="${precio}" data-imagen="${escapeHtml(p.imagen_url || '')}">
+          <button class="btn-gancho-agregar" data-id="${escapeHtml(p.id)}" data-nombre="${escapeHtml(p.nombre)}" data-precio="${precio}" data-precio-original="${Number(p.precio)}" data-imagen="${escapeHtml(p.imagen_url || '')}">
             + Agregar
           </button>
         </div>`;
@@ -1872,20 +1872,29 @@ const tienda = {
     // Bind botones
     lista.querySelectorAll('.btn-gancho-agregar').forEach(btn => {
       btn.addEventListener('click', () => {
-        const existente = tienda.carrito.find(i => String(i.id) === String(btn.dataset.id));
+        const idGancho = btn.dataset.id;
+        const existente = tienda.carrito.find(i => String(i.id) === String(idGancho));
         if (existente) {
           existente.cantidad += 1;
         } else {
           tienda.carrito.push({
-            id: btn.dataset.id,
+            id: idGancho,
             nombre: btn.dataset.nombre,
             imagen_url: btn.dataset.imagen,
             precio: Number(btn.dataset.precio),
+            precio_original: Number(btn.dataset.precioOriginal) || Number(btn.dataset.precio),
             cantidad: 1
           });
         }
         tienda.guardarCarrito();
         tienda.renderCarrito();
+
+        // Bounce en el badge del carrito
+        const badge = document.getElementById('badge-carrito');
+        badge.classList.remove('bounce');
+        void badge.offsetWidth;
+        badge.classList.add('bounce');
+
         btn.textContent = '✓ Agregado';
         btn.classList.add('agregado');
         btn.disabled = true;
