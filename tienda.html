@@ -2295,35 +2295,59 @@ const tienda = {
 /** Helper: ejecuta una función del servidor via google.script.run */
 function gsRun(fnName, ...args) {
   return new Promise((resolve, reject) => {
-    google.script.run
-      .withSuccessHandler(resolve)
-      .withFailureHandler(reject)
-      [fnName](...args);
+    if (typeof google !== 'undefined' && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        [fnName](...args);
+    } else {
+      reject(new Error('google.script.run no está disponible.'));
+    }
   });
 }
 
-/** Reemplaza fetch — usa google.script.run internamente */
+/** Reemplaza fetch — usa google.script.run internamente si está disponible, con fallback a fetch */
 async function fetchConTimeout(url, opciones = {}) {
-  try {
-    if (opciones.method === 'POST' && opciones.body) {
-      // POST: extraer action y params del body
-      const body = JSON.parse(opciones.body);
-      const action = body.action;
-      delete body.action;
-      return await gsRun('gsApi', action, body);
-    } else {
-      // GET: extraer action y params de la URL
-      const match = String(url).match(/[?&]action=([^&]+)/);
-      const action = match ? match[1] : '';
-      const params = {};
-      const paramMatches = String(url).matchAll(/[?&]([^=&]+)=([^&]*)/g);
-      for (const m of paramMatches) {
-        if (m[1] !== 'action') params[m[1]] = decodeURIComponent(m[2]);
+  // Si estamos en entorno de Google Apps Script
+  if (typeof google !== 'undefined' && google.script && google.script.run) {
+    try {
+      if (opciones.method === 'POST' && opciones.body) {
+        // POST: extraer action y params del body
+        const body = typeof opciones.body === 'string' ? JSON.parse(opciones.body) : opciones.body;
+        const action = body.action;
+        delete body.action;
+        return await gsRun('gsApi', action, body);
+      } else {
+        // GET: extraer action y params de la URL
+        const match = String(url).match(/[?&]action=([^&]+)/);
+        const action = match ? match[1] : '';
+        const params = {};
+        const paramMatches = String(url).matchAll(/[?&]([^=&]+)=([^&]*)/g);
+        for (const m of paramMatches) {
+          if (m[1] !== 'action') params[m[1]] = decodeURIComponent(m[2]);
+        }
+        return await gsRun('gsApi', action, params);
       }
-      return await gsRun('gsApi', action, params);
+    } catch (err) {
+      throw new Error(err.message || 'Error de comunicación con el servidor');
     }
+  }
+
+  // Fallback para desarrollo local (petición fetch normal)
+  console.warn("google.script.run no disponible. Usando fallback de fetch local...");
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), 15000);
+  try {
+    const res = await fetch(url, {
+      ...opciones,
+      signal: controller.signal
+    });
+    clearTimeout(id);
+    return await res.json();
   } catch (err) {
-    throw new Error(err.message || 'Error de comunicación con el servidor');
+    clearTimeout(id);
+    if (err.name === 'AbortError') throw new Error('Tiempo de espera agotado');
+    throw err;
   }
 }
 
