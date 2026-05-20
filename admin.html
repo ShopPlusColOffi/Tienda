@@ -1593,7 +1593,7 @@
 // ══════════════════════════════════════════════════════
 // ⚙️  CONFIGURA AQUÍ LA URL DE TU WEB APP DE APPS SCRIPT
 // ══════════════════════════════════════════════════════
-const API_URL = 'https://script.google.com/macros/s/AKfycbxmJZAV2voN8lz2plW4i2d2H5so2PXY0UPpx3ZTsAe493BaJFgY0Ix05Itf_nqK6JFL/exec';
+const API_URL = ''; // No se usa directamente, las llamadas van por google.script.run
 
 // ══════════════════════════════════════════════════════
 // ESTADO GLOBAL
@@ -2374,23 +2374,71 @@ const adminApp = {
 // ══════════════════════════════════════════════════════
 
 async function fetchAdmin(url, opciones = {}) {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), 15000);
-  try {
-    const res = await fetch(url, {
-      ...opciones,
-      signal: controller.signal,
-      headers: { 'Content-Type': 'text/plain', ...(opciones.headers || {}) }
-    });
-    clearTimeout(id);
-    const txt = await res.text();
-    try { return JSON.parse(txt); }
-    catch(e) { return { success: false, error: 'Respuesta inválida: ' + txt.substring(0,100) }; }
-  } catch(err) {
-    clearTimeout(id);
-    if (err.name === 'AbortError') return { success: false, error: 'Tiempo de espera agotado' };
-    return { success: false, error: err.message };
-  }
+  return new Promise((resolve) => {
+    let action = '';
+    let params = {};
+
+    // 1. Si la URL contiene parámetros de consulta (?action=...)
+    if (url.includes('?')) {
+      const queryString = url.split('?')[1];
+      const urlParams = new URLSearchParams(queryString);
+      action = urlParams.get('action') || '';
+      for (const [key, value] of urlParams.entries()) {
+        if (key !== 'action') {
+          params[key] = value;
+        }
+      }
+    }
+
+    // 2. Si hay un cuerpo de petición, extraer action y params
+    if (opciones.body) {
+      try {
+        const bodyObj = typeof opciones.body === 'string' ? JSON.parse(opciones.body) : opciones.body;
+        if (bodyObj.action) action = bodyObj.action;
+        params = { ...params, ...bodyObj };
+      } catch (e) {
+        console.error("Error parseando opciones.body en fetchAdmin:", e);
+      }
+    }
+
+    // 3. Obtener el token de admin del objeto, estado o sesión
+    const token = params.adminToken || adminApp.token || sessionStorage.getItem('adminToken') || '';
+
+    // 4. Enrutar usando google.script.run si está disponible
+    if (typeof google !== 'undefined' && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler((resultado) => {
+          resolve(resultado);
+        })
+        .withFailureHandler((err) => {
+          resolve({ success: false, error: err.message || 'Error en el servidor de Google' });
+        })
+        .gsAdminApi(token, action, params);
+    } else {
+      // Fallback para desarrollo local
+      console.warn("google.script.run no disponible. Usando fetch fallback...");
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), 15000);
+      fetch(url, {
+        ...opciones,
+        signal: controller.signal,
+        headers: { 'Content-Type': 'text/plain', ...(opciones.headers || {}) }
+      })
+      .then(res => {
+        clearTimeout(id);
+        return res.text();
+      })
+      .then(txt => {
+        try { resolve(JSON.parse(txt)); }
+        catch(e) { resolve({ success: false, error: 'Respuesta inválida: ' + txt.substring(0,100) }); }
+      })
+      .catch(err => {
+        clearTimeout(id);
+        if (err.name === 'AbortError') resolve({ success: false, error: 'Tiempo de espera agotado' });
+        else resolve({ success: false, error: err.message });
+      });
+    }
+  });
 }
 
 function escH(str) {
