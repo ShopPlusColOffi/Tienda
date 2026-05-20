@@ -1525,7 +1525,7 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbxmJZAV2voN8lz2plW4i2d2
 // ESTADO GLOBAL DE LA TIENDA
 // ══════════════════════════════════════════════════════
 const tienda = {
-  config: {},
+  config: JSON.parse(localStorage.getItem('tienda_config') || '{}'),
   productos: [],
   categorias: [],
   zonas: [],
@@ -1538,6 +1538,11 @@ const tienda = {
   // ── INICIALIZACIÓN ──────────────────────────────────
   async init() {
     try {
+      // Aplicar configuración desde caché para evitar demora visual
+      if (Object.keys(tienda.config).length > 0) {
+        tienda.aplicarConfig();
+      }
+
       // Cargar todo en paralelo
       const [config, productos, categorias, zonas] = await Promise.all([
         fetchConTimeout(API_URL + '?action=getConfiguracion'),
@@ -1548,6 +1553,7 @@ const tienda = {
 
       if (config.success) {
         tienda.config = config.data;
+        localStorage.setItem('tienda_config', JSON.stringify(config.data));
         tienda.aplicarConfig();
       }
       if (productos.success) tienda.productos = productos.data;
@@ -1844,9 +1850,13 @@ const tienda = {
   cambiarCantidad(id, delta) {
     const item = tienda.carrito.find(i => String(i.id) === String(id));
     if (!item) return;
-    item.cantidad = Math.max(1, item.cantidad + delta);
-    tienda.guardarCarrito();
-    tienda.renderCarrito();
+    item.cantidad += delta;
+    if (item.cantidad <= 0) {
+      tienda.quitarDelCarrito(id);
+    } else {
+      tienda.guardarCarrito();
+      tienda.renderCarrito();
+    }
   },
 
   // ── GUARDAR CARRITO ─────────────────────────────────
