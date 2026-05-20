@@ -2380,7 +2380,7 @@ async function fetchAdmin(url, opciones = {}) {
     const res = await fetch(url, {
       ...opciones,
       signal: controller.signal,
-      headers: { 'Content-Type': 'application/json', ...(opciones.headers || {}) }
+      headers: { 'Content-Type': 'text/plain', ...(opciones.headers || {}) }
     });
     clearTimeout(id);
     const txt = await res.text();
