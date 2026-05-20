@@ -165,6 +165,17 @@
       transform: scale(1);
     }
 
+    #badge-carrito.bounce {
+      animation: badgeBounce 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    @keyframes badgeBounce {
+      0%   { transform: scale(1); }
+      40%  { transform: scale(1.4); }
+      60%  { transform: scale(0.9); }
+      100% { transform: scale(1); }
+    }
+
     /* ══════════════════════════════════════════
        HERO
     ══════════════════════════════════════════ */
@@ -663,7 +674,20 @@
       border-radius: var(--radius-md);
       padding: 12px;
       border: 1px solid var(--color-border);
-      animation: slideInItem 0.2s ease;
+      animation: slideInItem 0.25s ease;
+      transition: opacity 0.3s ease, transform 0.3s ease, max-height 0.3s ease;
+      max-height: 200px;
+      overflow: hidden;
+    }
+
+    .item-carrito.removing {
+      opacity: 0;
+      transform: translateX(60px);
+      max-height: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      margin-top: 0;
+      border: 0;
     }
 
     @keyframes slideInItem {
@@ -690,6 +714,12 @@
     }
 
     .item-precio {
+      font-size: 0.8rem;
+      color: var(--color-text-muted);
+      font-weight: 500;
+    }
+
+    .item-linea-total {
       font-size: 0.9rem;
       color: var(--color-acento);
       font-weight: 700;
@@ -703,8 +733,8 @@
     }
 
     .btn-cantidad {
-      width: 28px; height: 28px;
-      border-radius: 6px;
+      width: 30px; height: 30px;
+      border-radius: 8px;
       background: var(--color-surface);
       border: 1px solid var(--color-border);
       color: var(--color-text);
@@ -714,17 +744,18 @@
     }
 
     .btn-cantidad:hover { background: var(--color-secundario); border-color: var(--color-secundario); }
+    .btn-cantidad:active { transform: scale(0.9); }
 
     .item-cantidad {
-      min-width: 24px;
+      min-width: 26px;
       text-align: center;
       font-weight: 700;
-      font-size: 0.9rem;
+      font-size: 0.95rem;
     }
 
     .btn-eliminar-item {
-      width: 28px; height: 28px;
-      border-radius: 6px;
+      width: 30px; height: 30px;
+      border-radius: 8px;
       background: transparent;
       border: 1px solid var(--color-border);
       color: var(--color-text-muted);
@@ -734,6 +765,13 @@
     }
 
     .btn-eliminar-item:hover { background: var(--color-error); border-color: var(--color-error); color: #fff; }
+    .btn-eliminar-item:active { transform: scale(0.9); }
+
+    .btn-agregar.added {
+      background: var(--color-success) !important;
+      border-color: var(--color-success) !important;
+      pointer-events: none;
+    }
 
     #drawer-footer {
       border-top: 1px solid var(--color-border);
@@ -1761,6 +1799,25 @@ const tienda = {
 
     tienda.guardarCarrito();
     tienda.renderCarrito();
+
+    // Feedback visual en el botón del producto
+    const btnProducto = document.querySelector(`.btn-agregar[data-id="${id}"]`);
+    if (btnProducto) {
+      const textoOriginal = btnProducto.innerHTML;
+      btnProducto.classList.add('added');
+      btnProducto.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg> ¡Agregado!`;
+      setTimeout(() => {
+        btnProducto.classList.remove('added');
+        btnProducto.innerHTML = textoOriginal;
+      }, 1200);
+    }
+
+    // Bounce en el badge del carrito
+    const badge = document.getElementById('badge-carrito');
+    badge.classList.remove('bounce');
+    void badge.offsetWidth; // force reflow
+    badge.classList.add('bounce');
+
     mostrarToast('✅ ' + producto.nombre.substring(0, 30) + ' agregado', 'success');
 
     // Verificar productos gancho (instantáneamente, sin bloquear)
@@ -1841,9 +1898,20 @@ const tienda = {
 
   // ── QUITAR DEL CARRITO ──────────────────────────────
   quitarDelCarrito(id) {
-    tienda.carrito = tienda.carrito.filter(i => String(i.id) !== String(id));
-    tienda.guardarCarrito();
-    tienda.renderCarrito();
+    // Animate removal
+    const itemEl = document.querySelector(`.item-carrito[data-item-id="${id}"]`);
+    if (itemEl) {
+      itemEl.classList.add('removing');
+      setTimeout(() => {
+        tienda.carrito = tienda.carrito.filter(i => String(i.id) !== String(id));
+        tienda.guardarCarrito();
+        tienda.renderCarrito();
+      }, 300);
+    } else {
+      tienda.carrito = tienda.carrito.filter(i => String(i.id) !== String(id));
+      tienda.guardarCarrito();
+      tienda.renderCarrito();
+    }
   },
 
   // ── CAMBIAR CANTIDAD ────────────────────────────────
@@ -1875,6 +1943,7 @@ const tienda = {
     const vacio = document.getElementById('carrito-vacio');
     const badge = document.getElementById('badge-carrito');
     const btnFinalizar = document.getElementById('btn-finalizar');
+    const drawerTitulo = document.getElementById('drawer-titulo');
 
     const totalItems = tienda.carrito.reduce((sum, i) => sum + i.cantidad, 0);
     const subtotal = tienda.calcularSubtotal();
@@ -1882,6 +1951,15 @@ const tienda = {
     // Badge
     badge.textContent = totalItems;
     badge.classList.toggle('visible', totalItems > 0);
+
+    // Drawer title with count
+    drawerTitulo.innerHTML = `
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
+        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+      </svg>
+      Tu carrito ${totalItems > 0 ? `<span style="font-size:0.8rem;color:var(--color-text-muted);font-weight:500;">(${totalItems} ${totalItems === 1 ? 'item' : 'items'})</span>` : ''}
+    `;
 
     // Subtotal y total en drawer
     document.getElementById('carrito-subtotal').textContent = formatPrecio(subtotal);
@@ -1898,27 +1976,31 @@ const tienda = {
     }
 
     // Ocultar mensaje vacío
+    vacio.style.display = 'none';
     if (vacio.parentElement === contenedor) vacio.remove();
 
-    contenedor.innerHTML = tienda.carrito.map(item => `
-      <div class="item-carrito">
+    contenedor.innerHTML = tienda.carrito.map(item => {
+      const lineTotal = item.precio * item.cantidad;
+      return `
+      <div class="item-carrito" data-item-id="${escapeHtml(item.id)}">
         ${item.imagen_url ? `<img class="item-img" src="${escapeHtml(item.imagen_url)}" alt="${escapeHtml(item.nombre)}" onerror="this.style.display='none'" />` : '<div class="item-img" style="display:flex;align-items:center;justify-content:center;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></div>'}
         <div class="item-info">
           <p class="item-nombre">${escapeHtml(item.nombre)}</p>
-          <p class="item-precio">${formatPrecio(item.precio)}</p>
+          <p class="item-precio">${formatPrecio(item.precio)} × ${item.cantidad}</p>
+          <p class="item-linea-total">${formatPrecio(lineTotal)}</p>
         </div>
         <div class="item-controles">
-          <button class="btn-cantidad" data-id="${escapeHtml(item.id)}" data-delta="-1" aria-label="Disminuir cantidad">−</button>
+          <button class="btn-cantidad" data-id="${escapeHtml(item.id)}" data-delta="-1" aria-label="${item.cantidad === 1 ? 'Eliminar producto' : 'Disminuir cantidad'}">${item.cantidad === 1 ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--color-error)" stroke-width="2.5"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/></svg>' : '−'}</button>
           <span class="item-cantidad">${item.cantidad}</span>
           <button class="btn-cantidad" data-id="${escapeHtml(item.id)}" data-delta="1" aria-label="Aumentar cantidad">+</button>
           <button class="btn-eliminar-item" data-id="${escapeHtml(item.id)}" aria-label="Eliminar del carrito">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M18 6 6 18M6 6l12 12"/>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/>
             </svg>
           </button>
         </div>
       </div>
-    `).join('');
+    `}).join('');
 
     // Bind controles
     contenedor.querySelectorAll('.btn-cantidad').forEach(btn => {
